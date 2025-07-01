@@ -1,7 +1,8 @@
-'From Cuis7.5 [latest update: #7279] on 27 June 2025 at 1:10:35 pm'!
+'From Cuis7.5 [latest update: #7294] on 30 June 2025 at 11:54:59 am'!
 'Description '!
-!provides: 'HashLib' 1 1!
-!requires: 'Cuis-Base' 75 7279 nil!
+!provides: 'HashLib' 1 2!
+!requires: 'Cuis-Base' 75 7294 nil!
+!requires: 'Stringprep' 1 1 nil!
 SystemOrganization addCategory: #HashLib!
 SystemOrganization addCategory: #'HashLib-Public'!
 SystemOrganization addCategory: #'HashLib-Tests'!
@@ -87,6 +88,26 @@ Object subclass: #Pbkdf2
 Pbkdf2 class
 	instanceVariableNames: ''!
 
+!classDefinition: #Sasl category: #'HashLib-Public'!
+Object subclass: #Sasl
+	instanceVariableNames: 'user password'
+	classVariableNames: ''
+	poolDictionaries: ''
+	category: 'HashLib-Public'!
+!classDefinition: 'Sasl class' category: #'HashLib-Public'!
+Sasl class
+	instanceVariableNames: ''!
+
+!classDefinition: #ScramSasl category: #'HashLib-Public'!
+Sasl subclass: #ScramSasl
+	instanceVariableNames: 'hash nonce salt iterations clientFirstMessageBare serverFirstMessage scram'
+	classVariableNames: ''
+	poolDictionaries: ''
+	category: 'HashLib-Public'!
+!classDefinition: 'ScramSasl class' category: #'HashLib-Public'!
+ScramSasl class
+	instanceVariableNames: ''!
+
 !classDefinition: #Scram category: #'HashLib-Public'!
 Object subclass: #Scram
 	instanceVariableNames: 'hash password salt iterations saltedPassword'
@@ -167,6 +188,16 @@ TestCase subclass: #Pbkdf2Tests
 Pbkdf2Tests class
 	instanceVariableNames: ''!
 
+!classDefinition: #ScramSaslTests category: #'HashLib-Tests'!
+TestCase subclass: #ScramSaslTests
+	instanceVariableNames: 'sasl'
+	classVariableNames: ''
+	poolDictionaries: ''
+	category: 'HashLib-Tests'!
+!classDefinition: 'ScramSaslTests class' category: #'HashLib-Tests'!
+ScramSaslTests class
+	instanceVariableNames: ''!
+
 !classDefinition: #ScramTests category: #'HashLib-Tests'!
 TestCase subclass: #ScramTests
 	instanceVariableNames: 'scram'
@@ -186,6 +217,9 @@ Salted Challenge-Response Authentication Mechanism!
 
 !Pbkdf2Tests commentStamp: 'ess 6/27/2025 12:08:49' prior: 0!
 See https://tools.ietf.org/html/rfc6070!
+
+!ScramSaslTests commentStamp: '<historical>' prior: 0!
+https://datatracker.ietf.org/doc/html/rfc5802#section-5!
 
 !ScramTests commentStamp: 'ess 6/27/2025 12:57:19' prior: 0!
 https://wiki.xmpp.org/web/SASL_Authentication_and_SCRAM!
@@ -884,13 +918,264 @@ hash: aHashDesignator password: passwordBytes salt: saltBytes iterations: iterat
 		length: derivedSize)
 			value! !
 
-!Scram methodsFor: 'evaluating' stamp: 'ess 6/27/2025 12:50:39'!
+!Sasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:40:09'!
+attributeAt: aCharacter put: aString
+
+	aCharacter = $e ifTrue: [
+		^ self error: 'Server error: ', aString ]
+! !
+
+!Sasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:28:12'!
+authMessage
+	"To be signed.  Composed of literal message fragments (including randomness) originating from both client and server."
+
+	^ self subclassResponsibility! !
+
+!Sasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:28:21'!
+authMessageBytes
+
+	^ self authMessage asUtf8Bytes! !
+
+!Sasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:27:47'!
+base64Decode: aString
+	"Decode aString as a ByteArray."
+
+	^ Base64MimeConverter
+		mimeDecode: aString readStream! !
+
+!Sasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:27:52'!
+base64Encode: aByteArray
+	"Encade aByteArray as a String."
+
+	^ (Base64MimeConverter
+		mimeEncode: aByteArray readStream)
+			contents! !
+
+!Sasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:34:42'!
+escape: aString
+
+	^ UnicodeString streamContents: [ :stream |
+		aString do: [ :each |
+			each = $,
+				ifTrue: [ stream nextPutAll: '=2C' ]
+				ifFalse: [
+					each = $=
+						ifTrue: [ stream nextPutAll: '=3D' ]
+						ifFalse: [
+							stream nextPut: each ] ] ] ]! !
+
+!Sasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:28:45'!
+gs2Header
+
+	^ 'n,,'! !
+
+!Sasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:28:50'!
+newRandom
+
+	^ ParkMiller93Random new
+		seed: Time localMicrosecondClock;
+		yourself! !
+
+!Sasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:53:40'!
+saslprep: aString
+
+	^ Stringprep saslprep: aString! !
+
+!Sasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:35:57'!
+serverMessage: aString
+
+	| tokens attribute value |
+	tokens := aString substringsSeparatedBy: $,.
+	tokens do: [ :each |
+		attribute := each first.
+		value := each
+			copyFrom: 3
+			to: each size.
+		self
+			attributeAt: attribute
+			put: value ]! !
+
+!Sasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:30:20'!
+setUser: userString password: passwordString
+
+	user := self saslprep: userString.
+	password := self saslprep: passwordString.
+	^ self! !
+
+!Sasl class methodsFor: 'instance creation' stamp: 'ess 6/30/2025 11:45:53'!
+user: userString password: passwordString
+
+	^ self new
+		setUser: userString
+		password: passwordString! !
+
+!ScramSasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:40:43'!
+attributeAt: aCharacter put: aString
+
+	aCharacter = $i ifTrue: [
+		^ iterations := Integer readFrom: aString readStream ].
+	aCharacter = $r ifTrue: [
+		^ self nonce: aString ].
+	aCharacter = $s ifTrue: [
+		^ salt := self base64Decode: aString ].
+	aCharacter = $v ifTrue: [
+		^ self serverSignature: (self base64Decode: aString) ].
+	super
+		attributeAt: aCharacter
+		put: aString! !
+
+!ScramSasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:51:08'!
+authMessage
+	"To be signed.  Composed of literal message fragments (including randomness) originating from both client and server."
+
+	^ self clientFirstMessageBare, ','
+		, self serverFirstMessage, ','
+		, self clientFinalMessageWithoutProof! !
+
+!ScramSasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:10:44'!
+clientFinalMessage
+	"Contains base-64 encoded clientProof."
+
+	| clientProof |
+	clientProof := self base64Encode: self clientProof.
+	^ self clientFinalMessageWithoutProof, ',p=', clientProof! !
+
+!ScramSasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:10:44'!
+clientFinalMessageWithoutProof
+
+	| channelBinding |
+	channelBinding := self base64Encode: self gs2Header asUtf8Bytes.
+	^ 'c=', channelBinding, ',r=', self nonce! !
+
+!ScramSasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:10:44'!
+clientFirstMessage
+	"Sent from client to server to initiate SASL authentication."
+
+	^ self gs2Header, self clientFirstMessageBare! !
+
+!ScramSasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:10:44'!
+clientFirstMessageBare
+	"Client's initial message to server, excluding GS2 header.  Includes username and some randomness."
+
+	^ clientFirstMessageBare ifNil: [
+		clientFirstMessageBare := 'n=', (self escape: user), ',r=', self nonce ]! !
+
+!ScramSasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:10:44'!
+clientProof
+
+	^ self scram
+		clientProof: self authMessageBytes! !
+
+!ScramSasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:17:49'!
+nonce
+
+	nonce ifNil: [
+		| random size c |
+		random := self newRandom.
+		size := (Hash from: hash) blockSize.
+		nonce := String streamContents: [ :out |
+			size timesRepeat: [
+				c := 33 + (92 * random next) rounded.
+				c >= $, codePoint ifTrue: [
+					c := c + 1 ].
+				out nextPut: (Character codePoint: c) ] ] ].
+	^ nonce! !
+
+!ScramSasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:10:44'!
+nonce: aString
+
+	nonce ifNil: [
+		^ nonce := aString ].
+	(aString beginsWith: self nonce) ifFalse: [
+		^ self error: 'Invalid server nonce' ].
+	nonce := aString! !
+
+!ScramSasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:12:16'!
+scram
+
+	^ scram ifNil: [
+		scram := Scram
+			hash: hash
+			password: password asByteArray
+			salt: salt
+			iterations: iterations ]! !
+
+!ScramSasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:37:43'!
+serverFinalMessage: aString
+
+	self serverMessage: aString! !
+
+!ScramSasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:49:56'!
+serverFirstMessage
+
+	^ serverFirstMessage! !
+
+!ScramSasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:36:55'!
+serverFirstMessage: aString
+
+	serverFirstMessage := aString.
+	self serverMessage: serverFirstMessage! !
+
+!ScramSasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:10:44'!
+serverSignature: aByteArray
+
+	| expectedSignature |
+	expectedSignature := self scram
+		serverSignature: self authMessageBytes.
+	aByteArray = expectedSignature ifFalse: [
+		^ self error: 'Invalid server signature' ]! !
+
+!ScramSasl methodsFor: 'as yet unclassified' stamp: 'ess 6/30/2025 11:31:57'!
+setHash: aHashDesignator
+
+	hash := aHashDesignator.
+	^ self! !
+
+!ScramSasl class methodsFor: 'instance creation' stamp: 'ess 6/30/2025 11:45:45'!
+hash: aHashDesignator user: userString password: passwordString
+
+	^ (self
+		user: userString
+		password: passwordString)
+			setHash: aHashDesignator! !
+
+!Scram methodsFor: 'evaluating' stamp: 'ess 6/30/2025 09:27:11'!
 clientKey
+
+	^ self
+		hmac: self saltedPassword
+		message: 'Client Key' asUtf8Bytes! !
+
+!Scram methodsFor: 'evaluating' stamp: 'ess 6/30/2025 09:26:36'!
+clientProof: messageBytes
+	"Allows server to reconstruct clientSignature and XOR to derive clientKey."
+
+	| clientKey clientSignature result xor |
+	clientKey := self clientKey.
+	clientSignature := self clientSignature: messageBytes.
+	result := ByteArray new: clientKey size.
+	1 to: result size do: [ :i |
+		xor := (clientKey at: i)
+			bitXor: (clientSignature at: i).
+		result
+			at: i
+			put: xor ].
+	^ result! !
+
+!Scram methodsFor: 'evaluating' stamp: 'ess 6/30/2025 09:24:56'!
+clientSignature: messageBytes
+
+	^ self
+		hmac: self storedKey
+		message: messageBytes! !
+
+!Scram methodsFor: 'evaluating' stamp: 'ess 6/30/2025 09:21:29'!
+hmac: keyBytes message: messageBytes
 
 	^ (Hmac
 		hash: hash
-		key: self saltedPassword)
-			digest: 'Client Key'! !
+		key: keyBytes)
+			digest: messageBytes! !
 
 !Scram methodsFor: 'evaluating' stamp: 'ess 6/27/2025 12:49:25'!
 saltedPassword
@@ -903,13 +1188,19 @@ saltedPassword
 			iterations: iterations ].
 	^ saltedPassword! !
 
-!Scram methodsFor: 'evaluating' stamp: 'ess 6/27/2025 12:50:50'!
+!Scram methodsFor: 'evaluating' stamp: 'ess 6/30/2025 09:27:25'!
 serverKey
 
-	^ (Hmac
-		hash: hash
-		key: self saltedPassword)
-			digest: 'Server Key'! !
+	^ self
+		hmac: self saltedPassword
+		message: 'Server Key' asUtf8Bytes! !
+
+!Scram methodsFor: 'evaluating' stamp: 'ess 6/30/2025 09:25:12'!
+serverSignature: messageBytes
+
+	^ self
+		hmac: self serverKey
+		message: messageBytes! !
 
 !Scram methodsFor: 'evaluating' stamp: 'ess 6/27/2025 12:51:46'!
 storedKey
@@ -1681,6 +1972,73 @@ testExample3
 	self
 		assertHexString: derived
 		equals: '4b007901b765489abead49d926f721d065a429c1'! !
+
+!ScramSaslTests methodsFor: 'constants' stamp: 'ess 6/30/2025 11:11:09'!
+clientFinalMessage
+
+	^ 'c=biws,r=fyko+d2lbbFgONRv9qkxdawL3rfcNHYJY1ZVvWVs7j,p=v0X8v3Bz2T0CJGbJQyF0X+HI4Ts='! !
+
+!ScramSaslTests methodsFor: 'constants' stamp: 'ess 6/30/2025 11:11:09'!
+clientFirstMessage
+
+	^ 'n,,n=user,r=fyko+d2lbbFgONRv9qkxdawL'! !
+
+!ScramSaslTests methodsFor: 'constants' stamp: 'ess 6/30/2025 11:11:09'!
+serverFinalMessage
+
+	^ 'v=rmF9pqV8S7suAoZWja4dJRkFsKQ='! !
+
+!ScramSaslTests methodsFor: 'constants' stamp: 'ess 6/30/2025 11:11:09'!
+serverFirstMessage
+
+	^ 'r=fyko+d2lbbFgONRv9qkxdawL3rfcNHYJY1ZVvWVs7j,s=QSXCR+Q6sek8bf92,i=4096'! !
+
+!ScramSaslTests methodsFor: 'setUp/tearDown' stamp: 'ess 6/30/2025 11:26:30'!
+setUp
+
+	sasl := ScramSasl
+		hash: 'SHA-1'
+		user: 'user'
+		password: 'pencil'.
+	sasl nonce: 'fyko+d2lbbFgONRv9qkxdawL'! !
+
+!ScramSaslTests methodsFor: 'tests' stamp: 'ess 6/30/2025 11:11:09'!
+testClientFinalMessage
+
+	sasl
+		clientFirstMessage;
+		serverFirstMessage: self serverFirstMessage.
+	self
+		assert: sasl clientFinalMessage
+		equals: self clientFinalMessage! !
+
+!ScramSaslTests methodsFor: 'tests' stamp: 'ess 6/30/2025 11:11:09'!
+testClientFirstMessage
+
+	self
+		assert: sasl clientFirstMessage
+		equals: 'n,,n=user,r=fyko+d2lbbFgONRv9qkxdawL'! !
+
+!ScramSaslTests methodsFor: 'tests' stamp: 'ess 6/30/2025 11:24:07'!
+testServerFinalMessage
+
+	sasl
+		clientFirstMessage;
+		serverFirstMessage: self serverFirstMessage;
+		clientFinalMessage.
+	self
+		shouldnt: [
+			sasl serverFinalMessage: self serverFinalMessage ]
+		raise: Error! !
+
+!ScramSaslTests methodsFor: 'tests' stamp: 'ess 6/30/2025 11:18:26'!
+testServerFirstMessage
+
+	sasl clientFirstMessage.
+	self
+		shouldnt: [
+			sasl serverFirstMessage: self serverFirstMessage ]
+		raise: Error! !
 
 !ScramTests methodsFor: 'as yet unclassified' stamp: 'ess 6/27/2025 13:05:32'!
 assertHexString: aByteArray equals: aString

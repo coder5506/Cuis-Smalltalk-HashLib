@@ -6,6 +6,12 @@ Hash functions and related utilities for [Cuis Smalltalk](https://cuis.st).
 
 [MIT License](LICENSE)
 
+## Dependencies
+
+- [Cuis-Smalltalk-Regexp](https://github.com/coder5506/Cuis-Smalltalk-Regexp)
+- [Cuis-Smalltalk-Stringprep](https://github.com/coder5506/Cuis-Smalltalk-Stringprep)
+- [Cuis-Smalltalk-Unicode](https://github.com/coder5506/Cuis-Smalltalk-Unicode)
+
 ## Features
 
 - [Hash functions](https://en.wikipedia.org/wiki/Cryptographic_hash_function)
@@ -14,10 +20,5 @@ Hash functions and related utilities for [Cuis Smalltalk](https://cuis.st).
   - [SHA-2](https://en.wikipedia.org/wiki/SHA-2)
 - [HMAC](https://en.wikipedia.org/wiki/HMAC)
 - [PBKDF2](https://en.wikipedia.org/wiki/PBKDF2)
-- [SCRAM](https://en.wikipedia.org/wiki/Salted_Challenge_Response_Authentication_Mechanism)
-
-## See Also
-
-[Cuis-Smalltalk-Stringprep](https://github.com/coder5506/Cuis-Smalltalk-Stringprep)
-provides [SASLprep](https://datatracker.ietf.org/doc/html/rfc4013)
-for use with PBKDF2 and SCRAM.
+- [SASL](https://datatracker.ietf.org/doc/html/rfc4422)
+- [SCRAM](https://datatracker.ietf.org/doc/html/rfc5802)
